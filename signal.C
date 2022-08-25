@@ -11,13 +11,22 @@ double electron_mobility = electron_drift_velocity * gap_length / bias_voltage;
 void signal_single_pair(double x, double charge, double mobility_factor, std::vector<double>& output) {
   double tcn = x / (electron_mobility * bias_voltage / gap_length);
   double tcp = (gap_length - x) / (mobility_factor * electron_mobility * bias_voltage / gap_length);
-
   double icnp = charge * electron_mobility * (1 + mobility_factor) * bias_voltage / TMath::Power(gap_length, 2);
+  
   double icp = charge * electron_mobility * mobility_factor * bias_voltage / TMath::Power(gap_length, 2);
-  output.push_back(tcn / 1E-9);
-  output.push_back(tcp / 1E-9);
-  output.push_back(icnp);
-  output.push_back(icp);
+  double icn = charge * electron_mobility * bias_voltage / TMath::Power(gap_length, 2);
+
+  if (tcn <= tcp) {
+      output.push_back(tcn / 1E-9);
+      output.push_back(tcp / 1E-9);
+      output.push_back(icnp);
+      output.push_back(icp);
+  } else {
+      output.push_back(tcp / 1E-9);
+      output.push_back(tcn / 1E-9);
+      output.push_back(icnp);
+      output.push_back(icn);
+  }
 }
 
 void signal() {
@@ -40,12 +49,12 @@ void signal() {
     int total_pair = (int) (total_Edep * 1E6 / ar_ionE);
     double average_pair_distance = gap_length / (double) total_pair;
 
+    TRandom* rng = new TRandom();
 
     std::vector<std::vector<double>> single_pair_current;
     for (unsigned int i = 0; i < total_pair; i++) {
         double x = average_pair_distance * (0.5 + (double) i);
-        double charge = 1.6E-19;
-        // double mobility_factor = 2. / 1000.;
+        double charge = 1.6E-19 * rng->Gaus(1, 0.1);
         double mobility_factor = 2. / 100.;
         std::vector<double> output;
         signal_single_pair(x, charge, mobility_factor, output);
@@ -53,7 +62,7 @@ void signal() {
     }
 
     std::vector<std::pair<double, double>> total_current;
-    for (unsigned int i = 0; i < 10001; i++) {
+    for (unsigned int i = 0; i < 100001; i++) {
         double current = 0;
         for (auto& elem : single_pair_current) {
             if (i <= elem.at(0)) {
@@ -62,7 +71,7 @@ void signal() {
                 current += elem.at(3);
             }
         }
-        if (current != 0) std::cout << Form("%05i : %15.4f", i, current) << std::endl;
+        if (current != 0) std::cout << Form("%06i : %15.6f", i, current) << std::endl;
         total_current.push_back(std::make_pair((double)i, current));
     }
 
@@ -70,5 +79,5 @@ void signal() {
     for (auto& elem : total_current) {
         gr->AddPoint(elem.first, elem.second);
     }
-    gr->Draw("APL");
+    gr->Draw("AL");
 }
